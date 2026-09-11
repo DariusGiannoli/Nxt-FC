@@ -1,5 +1,7 @@
 # Nxt-FC DUAL
 
+Moving-arm firmware work: [review summary and verification](MORPHING_ALLOCATION.md).
+
 
 
 ![Nxt-FC](https://khalil-picgo-1321910894.cos.ap-hongkong.myqcloud.com/images/202404161605587.png)
