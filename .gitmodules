@@ -1,7 +1,7 @@
 [submodule "PX4-Autopilot"]
 	path = PX4-Autopilot
 	url = https://github.com/DariusGiannoli/PX4-Autopilot.git
-	branch = codex/morphing-arm-allocation
+	branch = firmware/morphing-arm-allocation
 [submodule "Nxt-FC-Hardware"]
 	path = Nxt-FC-Hardware
 	url = https://github.com/Peize-Liu/NxtPX4-Hardware.git
