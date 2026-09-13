@@ -86,7 +86,7 @@ invalidates remembered channel availability and requires all four targets again.
 The module is included in the NxtPX4v2 build and starts at boot only when
 `MORPH_PUB_EN=1`. It refuses startup unless source 13, four rotors and valid
 calibration are configured. Calibration uses measured arm angles at normalized
--1, 0 and +1, with two linear interpolation segments. Default calibration is
+-1, a configurable center command, and +1, with two linear interpolation segments. Default calibration is
 invalid; no measured data is supplied for this aircraft. Restart the publisher
 after changing calibration or timeout. The console simulator is blocked while
 the production publisher is enabled.
@@ -107,13 +107,17 @@ the publisher is stale or stops, and servo travel time is not modeled.
 Host tests verify startup/calibration rejection, reversed curves, NaN/partial
 updates, invalid and replayed commands, timestamps, timeout recovery, queue loss,
 and real uORB commands through to the expected front-right effectiveness matrix.
-The new publisher has not been tested on physical servo hardware or in flight.
+Physical servo movement and return were confirmed on the FC. A later PS5 test
+confirmed a front-right 12-degree command, accepted angle messages, matching
+geometry/assigned-matrix generation 460, and restoration of the neutral matrix.
+Flight validation and measured calibration remain outstanding.
 
 See [publisher setup, calibration and verification](PX4-Autopilot/src/modules/morphing_arm_publisher/README.md).
 
 Physical geometry/CoG and motor rotation signs still need verification. The tested
-configuration had three positive yaw coefficients and one negative; these must be
-checked against the actual motor directions. The reported `sysinit: fopen failed`
+configuration originally had three positive yaw coefficients and one negative.
+The latest console snapshot has [-0.05,-0.05,+0.05,+0.05]; physical rotation must
+still match the configured signs. The reported `sysinit: fopen failed`
 warning and earlier USB disconnect reports have not been fully diagnosed.
 
 See [the detailed implementation and test guide](PX4-Autopilot/Tools/morphing_quad_geometry/README.md).
@@ -124,5 +128,24 @@ A [USB sender and test guide](tools/README.md) now exercises real
 `DO_SET_ACTUATOR` commands through the servo output path and publisher, recording
 the arm messages and matrices. It can temporarily install explicitly assumed
 calibration and enable non-motor outputs while disarmed, then restores the original
-parameters. Offline success/failure cleanup tests pass; the combined hardware
-run is still pending. No additional FC firmware change is required for this sender.
+parameters. Offline success/failure cleanup tests pass, and the user confirmed
+the combined hardware test moved the front-right servo and returned it to neutral.
+
+## Configurable neutral command
+
+Commit `6bb4dc4772` adds `MARM_{FR,RR,RL,FL}_CTR` so the calibration middle
+sample need not occur at normalized command zero. Default centers remain zero.
+For the latest output configuration, Sets 1/2/3/4 use MAIN 8/7/6/5 with disarmed
+PWM 1500/1420/1550/1500 us. Centers [0,-0.16,0.10,0] and ZERO angles all zero
+make those resting PWM values correspond to neutral geometry. Physical arm
+identity still must match the message order.
+
+The publisher functional suite passes, including neutral offsets, shifted travel
+and invalid-center rejection. The board build succeeds (image 1,820,000 bytes).
+The center-aware image was flashed and parameters applied; physical neutral and
+matrix verification after this change remain pending.
+
+The separate LISRobot PS5 sender supplies all four targets at 10 Hz, uses arrows
+for individual arms, ramps with default target/speed 0.4/0.4, and checks neutral
+configuration before sending. Eleven offline Python tests pass. It issues no
+arming or flight-mode commands. RC AUX passthrough remains unsupported.
