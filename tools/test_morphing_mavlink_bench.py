@@ -46,8 +46,13 @@ class FakeLink:
         self.commands.append(command)
         if command == "listener actuator_armed -n 1":
             return STATUS.replace("prearmed: True", f"prearmed: {self.params['COM_PREARM_MODE'] == 2}")
+        if command.startswith("param show -q "):
+            name = command.split()[-1]
+            return f"{command}\r\n{self.params[name]:.4f}nsh> "
         if command.startswith("param show "):
             name = command.split()[-1]
+            if name.startswith("MARM_"):
+                return "Symbols: x = used, + = saved, * = unsaved\nnsh>"
             return "\n".join(f"x + {k} [1,2] : {v}" for k,v in self.params.items()
                              if k == name or (name.endswith('*') and k.startswith(name[:-1])))
         if command == "morphing_arm_publisher status":
@@ -57,6 +62,8 @@ class FakeLink:
         if command == "listener morphing_arm_state -n 1" and self.fail_movement and self.targets[0] > 0:
             raise RuntimeError("simulated failure")
         return "nsh>"
+
+    get_param = bench.Link.get_param
 
     def set_param(self, name, value):
         self.params[name] = value
@@ -70,6 +77,15 @@ class FakeLink:
 
 
 class BenchTests(unittest.TestCase):
+    def test_quiet_read_includes_unused_parameters_and_handles_prompt(self):
+        self.assertEqual(bench.parse_quiet_parameter("param show -q MARM_FR_NEG\r\n-30.0000nsh> "), -30.)
+        self.assertEqual(bench.parse_quiet_parameter("param show -q MORPH_PUB_EN\n0\nnsh> "), 0.)
+        with self.assertRaises(RuntimeError):
+            bench.parse_quiet_parameter("param show -q MISSING\nnsh> ")
+        link = FakeLink("fake", None)
+        self.assertNotIn("MARM_FR_NEG [", link.shell("param show MARM_*"))
+        self.assertEqual(link.get_param("MARM_FR_NEG"), 0.)
+
     def test_parser_and_disarmed_gate(self):
         self.assertEqual(bench.parse_parameters("x + MARM_FR_NEG [1,2] : -30.0000"), {"MARM_FR_NEG": -30})
         bench.require_disarmed_prearmed(STATUS)
@@ -94,6 +110,8 @@ class BenchTests(unittest.TestCase):
             self.assertTrue(all(all(abs(v) <= .05 for v in target) for target in link.sent))
             self.assertEqual(link.sent[-1], [0.] * 4)
             self.assertIn("morphing_arm_publisher stop", link.commands)
+            self.assertNotIn("param show MARM_*", link.commands)
+            self.assertTrue(all(f"param show -q {name}" in link.commands for name in bench.assumed_calibration()))
             record = json.loads(next(Path(folder).glob('*restore.json')).read_text())
             self.assertTrue(record['restored'])
 

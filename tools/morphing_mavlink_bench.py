@@ -22,6 +22,14 @@ def parse_parameters(output):
     return values
 
 
+def parse_quiet_parameter(output):
+    # NSH may append its prompt immediately because param show -q prints no newline.
+    match = re.search(r"(?m)^\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*(?:nsh>)?\s*$", output)
+    if not match:
+        raise RuntimeError("No numeric parameter value returned by the FC")
+    return float(match[1])
+
+
 def assumed_calibration():
     return {f"MARM_{arm}_{point}": angle for arm in ("FR", "RR", "RL", "FL")
             for point, angle in (("NEG", -30.0), ("ZERO", 0.0), ("POS", 30.0))}
@@ -117,11 +125,18 @@ class Link:
                 return output
         raise RuntimeError(f"Console timed out: {command}")
 
+    def get_param(self, name):
+        # This reads unused parameters too, unlike the default param show listing.
+        try:
+            return parse_quiet_parameter(self.shell(f"param show -q {name}"))
+        except RuntimeError as error:
+            raise RuntimeError(f"Cannot read parameter {name}; check firmware/console output") from error
+
     def set_param(self, name, value):
         output = self.shell(f"param set {name} {value:.9g}")
         if "not found" in output.lower() or "ERROR" in output:
             raise RuntimeError(f"Parameter write failed: {name}")
-        actual = parse_parameters(self.shell(f"param show {name}")).get(name)
+        actual = self.get_param(name)
         if actual is None or not math.isclose(actual, value, rel_tol=1e-6, abs_tol=1e-6):
             raise RuntimeError(f"Parameter readback failed: {name}")
 
@@ -160,15 +175,13 @@ def run(args):
             if sum(301 <= value <= 304 for value in assignments.values()) != 4:
                 raise RuntimeError("Duplicate peripheral output assignments; stopping.")
             for name, expected_value in (("CA_AIRFRAME", 13), ("CA_ROTOR_COUNT", 4), ("MORPH_PUB_EN", 0)):
-                if parse_parameters(link.shell(f"param show {name}")).get(name) != expected_value:
+                if link.get_param(name) != expected_value:
                     raise RuntimeError(f"Requires {name}={expected_value} before this bench test.")
             publisher_status = link.shell("morphing_arm_publisher status")
             if "not running" not in publisher_status.lower():
                 raise RuntimeError("Publisher must be stopped before this isolated bench test.")
             requested = assumed_calibration() if args.assume_linear_bench else {}
-            values = parse_parameters(link.shell("param show MARM_*"))
-            if not set(assumed_calibration()).issubset(values):
-                raise RuntimeError("Calibration parameters missing; flash the publisher firmware.")
+            values = {name: link.get_param(name) for name in assumed_calibration()}
             if not args.assume_linear_bench:
                 for arm in ("FR", "RR", "RL", "FL"):
                     lo, mid, hi = (values[f"MARM_{arm}_{p}"] for p in ("NEG", "ZERO", "POS"))
@@ -177,7 +190,7 @@ def run(args):
             backup = {name: values[name] for name in requested}
             backup["MORPH_PUB_EN"] = 0
             if args.enable_prearm_bench:
-                prearm = parse_parameters(link.shell("param show COM_PREARM_MODE")).get("COM_PREARM_MODE")
+                prearm = link.get_param("COM_PREARM_MODE")
                 if prearm is None:
                     raise RuntimeError("COM_PREARM_MODE missing.")
                 backup["COM_PREARM_MODE"] = prearm
