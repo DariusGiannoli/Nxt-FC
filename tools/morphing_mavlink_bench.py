@@ -13,6 +13,11 @@ import sys
 import time
 
 
+# Standard command ID from the firmware's MAVLink common.xml. Older generated
+# pymavlink dialects can encode COMMAND_LONG even if this enum name is absent.
+MAV_CMD_DO_SET_ACTUATOR = 187
+
+
 def clean_console(output):
     # NSH emits ANSI colour/erase sequences over MAVLink SERIAL_CONTROL.
     output = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
@@ -113,7 +118,7 @@ class Link:
             self.targets = None
             raise RuntimeError("PX4 heartbeat lost: command streaming stopped; recovery may be needed.")
         if self.targets is not None and not self.unsafe and now >= self.next_target:
-            self.link.mav.command_long_send(self.system, self.component, mav.MAV_CMD_DO_SET_ACTUATOR,
+            self.link.mav.command_long_send(self.system, self.component, MAV_CMD_DO_SET_ACTUATOR,
                                             0, *self.targets, math.nan, math.nan, 0)
             self.next_target = now + 0.1
 

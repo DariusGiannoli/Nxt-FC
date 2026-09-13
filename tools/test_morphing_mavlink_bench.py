@@ -5,6 +5,8 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import time
+import math
 import types
 import unittest
 from unittest.mock import patch
@@ -125,6 +127,36 @@ class BenchTests(unittest.TestCase):
             self.assertTrue(all(f"param show -q {name}" in link.commands for name in bench.assumed_calibration()))
             record = json.loads(next(Path(folder).glob('*restore.json')).read_text())
             self.assertTrue(record['restored'])
+
+    def test_actual_mavlink_wire_encoding_without_enum_name(self):
+        # Encode and decode actual packets offline with the installed library.
+        from pymavlink.dialects.v10 import ardupilotmega as v1
+        from pymavlink.dialects.v20 import ardupilotmega as v2
+        for dialect in (v1, v2):
+            with self.subTest(dialect=dialect.__name__):
+                packet = io.BytesIO()
+                writer = dialect.MAVLink(packet, srcSystem=254, srcComponent=190)
+                link = bench.Link.__new__(bench.Link)
+                link.util = types.SimpleNamespace(mavlink=dialect)
+                link.link = types.SimpleNamespace(mav=writer, recv_match=lambda **kwargs: None)
+                link.system = link.component = 1
+                link.heartbeat_at = time.monotonic()
+                link.next_gcs = time.monotonic() + 60
+                link.next_target = 0
+                link.targets = [.05, 0., 0., 0.]
+                link.unsafe = link.cleanup = False
+                link.pump()
+                decoded = dialect.MAVLink(None).parse_char(packet.getvalue())
+                self.assertEqual(decoded.get_type(), 'COMMAND_LONG')
+                self.assertEqual(decoded.command, 187)
+                self.assertEqual(decoded.target_system, 1)
+                self.assertEqual(decoded.target_component, 1)
+                self.assertAlmostEqual(decoded.param1, .05, places=6)
+                self.assertEqual((decoded.param2, decoded.param3, decoded.param4), (0., 0., 0.))
+                self.assertTrue(math.isnan(decoded.param5))
+                self.assertTrue(math.isnan(decoded.param6))
+                self.assertEqual(decoded.param7, 0.)
+                self.assertEqual(decoded.confirmation, 0)
 
     def test_success_restores_parameters(self):
         self.exercise(False)
