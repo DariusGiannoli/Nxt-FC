@@ -1,6 +1,25 @@
 # Nxt-FC DUAL
 
-Moving-arm firmware work: [review summary and verification](MORPHING_ALLOCATION.md).
+## Moving-arm firmware — supervisor summary
+
+The firmware on `firmware/morphing-arm-allocation` updates the motor allocation
+matrix from four commanded horizontal arm angles. Enable it with
+`CA_AIRFRAME=13` and `CA_ROTOR_COUNT=4`. The input is `morphing_arm_state`:
+radians in **FR, RR, RL, FL** order, limited to +/-30 degrees.
+
+- **Implemented:** angle validation, CAD-based rotor geometry, matrix updates,
+  diagnostics, and a disarmed console publisher.
+- **Verified:** four automated test suites, 1,081 reference geometry comparisons,
+  and an FC bench test showing a front-right 10-degree update and return to neutral.
+- **Missing:** a calibrated bridge from actual servo commands to the arm-angle
+  topic. MAVLink actuator commands and RC AUX outputs do not currently inform
+  the morphing allocator; they use different input paths.
+- **Limits:** commanded positions are assumed immediately. There is no position
+  feedback or stale-input timeout; the allocator holds its last valid geometry.
+  Physical servo movement and flight have not been validated.
+
+[Detailed supervisor summary, code diff and verification steps](MORPHING_ALLOCATION.md).
+
 
 
 
