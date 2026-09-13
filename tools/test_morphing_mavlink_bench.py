@@ -48,7 +48,7 @@ class FakeLink:
             return STATUS.replace("prearmed: True", f"prearmed: {self.params['COM_PREARM_MODE'] == 2}")
         if command.startswith("param show -q "):
             name = command.split()[-1]
-            return f"{command}\r\n{self.params[name]:.4f}nsh> "
+            return f"{command}\r\n{self.params[name]:.4f}nsh> \x1b[K"
         if command.startswith("param show "):
             name = command.split()[-1]
             if name.startswith("MARM_"):
@@ -85,6 +85,17 @@ class BenchTests(unittest.TestCase):
         link = FakeLink("fake", None)
         self.assertNotIn("MARM_FR_NEG [", link.shell("param show MARM_*"))
         self.assertEqual(link.get_param("MARM_FR_NEG"), 0.)
+
+    def test_real_fc_quiet_output_with_terminal_escapes(self):
+        # Exact response captured from the failed FC run, including erase-to-EOL.
+        output = "param show -q CA_AIRFRAME\n13nsh> \x1b[K"
+        self.assertEqual(bench.parse_quiet_parameter(output), 13.)
+        for trailer in ("\x1b", "\x1b[", "\x1b[K", "\x1b[0m\x1b[K"):
+            self.assertEqual(bench.parse_quiet_parameter("param show -q X\r\n-30.0000nsh> " + trailer), -30.)
+        self.assertEqual(bench.parse_quiet_parameter("param show -q X\n\x1b[32m0.0000\x1b[0mnsh> "), 0.)
+        with self.assertRaises(RuntimeError):
+            bench.parse_quiet_parameter("param show -q MISSING\nnsh> \x1b[K")
+        bench.require_disarmed_prearmed("\x1b[0m" + STATUS + "nsh> \x1b[K")
 
     def test_parser_and_disarmed_gate(self):
         self.assertEqual(bench.parse_parameters("x + MARM_FR_NEG [1,2] : -30.0000"), {"MARM_FR_NEG": -30})

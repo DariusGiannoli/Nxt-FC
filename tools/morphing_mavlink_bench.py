@@ -13,7 +13,14 @@ import sys
 import time
 
 
+def clean_console(output):
+    # NSH emits ANSI colour/erase sequences over MAVLink SERIAL_CONTROL.
+    output = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", output)
+    return output.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def parse_parameters(output):
+    output = clean_console(output)
     values = {}
     for line in output.splitlines():
         match = re.search(r"\b([A-Z][A-Z0-9_]*)\s+\[[^\]]+\]\s*:\s*([-+0-9.eE]+)\s*$", line)
@@ -23,8 +30,10 @@ def parse_parameters(output):
 
 
 def parse_quiet_parameter(output):
-    # NSH may append its prompt immediately because param show -q prints no newline.
-    match = re.search(r"(?m)^\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*(?:nsh>)?\s*$", output)
+    # Ignore prompt decorations, including an ANSI sequence split across packets.
+    # param show -q does not add a newline between the value and prompt.
+    output = clean_console(output.split("nsh>", 1)[0])
+    match = re.search(r"(?m)^\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*$", output)
     if not match:
         raise RuntimeError("No numeric parameter value returned by the FC")
     return float(match[1])
@@ -36,6 +45,7 @@ def assumed_calibration():
 
 
 def require_disarmed_prearmed(output, allow_not_prearmed=False):
+    output = clean_console(output)
     if not re.search(r"(?m)^\s*armed:\s*False\s*$", output, re.I):
         raise RuntimeError("Cannot confirm disarmed state; stopping without changing parameters.")
     if not allow_not_prearmed and not re.search(r"(?m)^\s*prearmed:\s*True\s*$", output, re.I):
