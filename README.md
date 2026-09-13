@@ -8,15 +8,16 @@ matrix from four commanded horizontal arm angles. Enable it with
 radians in **FR, RR, RL, FL** order, limited to +/-30 degrees.
 
 - **Implemented:** angle validation, CAD-based rotor geometry, matrix updates,
-  diagnostics, and a disarmed console publisher.
-- **Verified:** four automated test suites, 1,081 reference geometry comparisons,
+  diagnostics, a disarmed console publisher, and a calibrated MAVLink publisher.
+- **Verified:** five automated test suites, 1,081 reference geometry comparisons,
   and an FC bench test showing a front-right 10-degree update and return to neutral.
-- **Missing:** a calibrated bridge from actual servo commands to the arm-angle
-  topic. MAVLink actuator commands and RC AUX outputs do not currently inform
-  the morphing allocator; they use different input paths.
-- **Limits:** commanded positions are assumed immediately. There is no position
-  feedback or stale-input timeout; the allocator holds its last valid geometry.
-  Physical servo movement and flight have not been validated.
+- **New publisher:** `morphing_arm_publisher` observes MAVLink actuator commands,
+  converts them using measured per-arm calibration, and publishes arm angles.
+  It is disabled by default and rejects uncalibrated startup. RC AUX is not covered.
+- **Limits:** commanded positions are assumed immediately. The publisher reports
+  stale commands and requires all four targets again; the allocator still holds
+  its last valid geometry. Calibration, physical servo tests and flight validation
+  remain outstanding; the publisher does not add an arming interlock.
 
 [Detailed supervisor summary, code diff and verification steps](MORPHING_ALLOCATION.md).
 

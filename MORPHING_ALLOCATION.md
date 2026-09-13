@@ -2,6 +2,8 @@
 
 Firmware change: [861f26f26e — full code diff](https://github.com/DariusGiannoli/PX4-Autopilot/commit/861f26f26e4f5cc7b6b379e7bae6b09f42239967).
 
+Publisher addition: [2f1f92457c — code and tests](https://github.com/DariusGiannoli/PX4-Autopilot/commit/2f1f92457ca9774c18638f57817405582b041260).
+
 ## Objective and implemented behavior
 
 Update PX4's motor effectiveness matrix from commanded horizontal arm angles,
@@ -10,15 +12,16 @@ existing control allocator; no separate scheduled listener module is needed.
 Select it with `CA_AIRFRAME=13` and `CA_ROTOR_COUNT=4`.
 
 ```text
-Servo-driving code (still to be added)
+MAVLink DO_SET_ACTUATOR -> calibrated morphing_arm_publisher
     -> morphing_arm_state: timestamp + four commanded angles
     -> ActuatorEffectivenessMorphingQuad: validate angles and compute rotor positions
     -> updated effectiveness matrix B
     -> existing PX4 allocation, motor limits and outputs
 ```
 
-The included disarmed console command substitutes for the missing publisher during
-bench testing. It does not move a servo.
+The disarmed console command supplies simulated angles for bench testing. The new
+`morphing_arm_publisher` observes actual MAVLink commands; existing PX4 peripheral
+outputs perform servo actuation. Both paths publish commanded, not measured, angles.
 
 ## Changes to review
 
@@ -49,7 +52,7 @@ used for allocation. `B` is the effectiveness matrix, not the normalized inverse
 
 - Host geometry: 1,081 CAD/reference comparisons passed, including +/-30 degree
   combinations and random configurations; maximum matrix-entry error 2.42e-7.
-- Four targeted PX4 test suites passed: provider, actual allocator integration,
+- Five targeted PX4 test suites passed, including the new publisher-to-matrix test: provider, actual allocator integration,
   pseudoinverse, and sequential desaturation.
 - NxtPX4v2 ARM target `hkust_nxt-dual_default` built successfully with GCC 9.3.1.
   Static checked stack paths use at most 2,296 of 3,150 bytes, with 512 bytes reserved
@@ -73,46 +76,40 @@ control_allocator status
 
 ## Remaining work and limits
 
-The console test publishes `morphing_arm_state`, but no production servo-command
-publisher is connected. Before the first valid message the allocator uses neutral;
-afterward it holds the last valid geometry, including any simulated test angles.
+`morphing_arm_publisher` now subscribes to `vehicle_command`, filters
+`DO_SET_ACTUATOR` group 0 and maps parameters 1–4 to FR/RR/RL/FL. It retains
+NaN channels, validates complete commands, interpolates measured per-arm
+calibration, and publishes finite radians with increasing timestamps.
+All four targets must be known before publication. Queue loss or command timeout
+invalidates remembered channel availability and requires all four targets again.
 
-Existing PX4 output support can drive suitably configured servos without informing
-the morphing allocator. The two relevant paths are distinct:
+The module is included in the NxtPX4v2 build and starts at boot only when
+`MORPH_PUB_EN=1`. It refuses startup unless source 13, four rotors and valid
+calibration are configured. Calibration uses measured arm angles at normalized
+-1, 0 and +1, with two linear interpolation segments. Default calibration is
+invalid; no measured data is supplied for this aircraft. Restart the publisher
+after changing calibration or timeout. The console simulator is blocked while
+the production publisher is enabled.
 
-| Input | Existing output path | Missing connection |
-| --- | --- | --- |
-| MAVLink `DO_SET_ACTUATOR` | `vehicle_command` -> `FunctionActuatorSet` -> assigned peripheral output | Convert the accepted commands into calibrated arm angles and publish them. |
-| RC AUX passthrough | `manual_control_setpoint` -> `FunctionManualRC` -> assigned RC output | Observe the selected AUX values or a shared servo-command stage; a `vehicle_command` subscriber alone cannot see these updates. |
+The bridge observes the MAVLink peripheral-output path; RC AUX passthrough uses
+`manual_control_setpoint` and remains unsupported. It does not confirm actual PWM
+output, servo motion or feedback, and it does not synchronize manual overrides,
+output tests or output failsafes. Valid output assignments and a sender following
+the documented command interface are required. It does not intercept or veto
+commands reaching the output driver.
 
-For the proposed MAVLink bridge, use `VEHICLE_CMD_DO_SET_ACTUATOR` with group
-`param7=0`, and explicitly assign `param1` through `param4` to FR/RR/RL/FL.
-Retain the previous channel target for NaN fields. Initialize all four targets
-from an established arm state before publishing partial updates; an unknown
-position must not silently become a claimed neutral position. The existing
-`FunctionActuatorSet` retains its values for all nonfinite fields and rounds
-`param7` when selecting a group, so input acceptance must be coordinated with
-that output path.
+`morphing_publisher_status` reports initialization, stale commands, rejected inputs
+and command-queue loss. The publisher warns after `MORPH_PUB_TMO` seconds without
+an accepted arm update. This is diagnostic protection, not an arming interlock or
+an independent watchdog: the allocator still holds its last accepted geometry if
+the publisher is stale or stops, and servo travel time is not modeled.
 
-Convert normalized commands with a **measured per-arm calibration curve** that
-includes output scaling/reversal, linkage and mounting zero. Calibration data is
-not yet available. Published values must be finite radians within the firmware's
-exact +/-pi/6 limit (approximately +/-0.523598776), with a strictly increasing FC
-monotonic timestamp. One invalid angle rejects the whole message. Do not merely
-clamp the published angle while allowing the servo to receive a different target.
-Output assignments and command limits must match what the bridge reports.
+Host tests verify startup/calibration rejection, reversed curves, NaN/partial
+updates, invalid and replayed commands, timestamps, timeout recovery, queue loss,
+and real uORB commands through to the expected front-right effectiveness matrix.
+The new publisher has not been tested on physical servo hardware or in flight.
 
-Verify with `listener morphing_geometry -n 1`: `input_result=1` indicates an
-accepted input, and `rotor_position` should follow the calibrated angles. Check
-`listener morphing_allocation_matrix -n 1` for the assigned matrix. Changed angles
-should produce a new matrix generation; an unchanged accepted target need not.
-
-These are commanded positions, not measured feedback. Servo travel time is not
-modeled, so during movement the matrix can lead the physical geometry. There is
-no stale-input timeout, neutral fallback or stale-input warning in this provider.
-Production integration needs an explicit policy for initialization and loss of
-commands/publication, coordinated with actual servo behavior. Physical servo
-movement, calibration and flight testing remain outstanding.
+See [publisher setup, calibration and verification](PX4-Autopilot/src/modules/morphing_arm_publisher/README.md).
 
 Physical geometry/CoG and motor rotation signs still need verification. The tested
 configuration had three positive yaw coefficients and one negative; these must be
