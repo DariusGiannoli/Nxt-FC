@@ -117,3 +117,12 @@ checked against the actual motor directions. The reported `sysinit: fopen failed
 warning and earlier USB disconnect reports have not been fully diagnosed.
 
 See [the detailed implementation and test guide](PX4-Autopilot/Tools/morphing_quad_geometry/README.md).
+
+## Combined MAVLink bench test
+
+A [USB sender and test guide](tools/README.md) now exercises real
+`DO_SET_ACTUATOR` commands through the servo output path and publisher, recording
+the arm messages and matrices. It can temporarily install explicitly assumed
+calibration and enable non-motor outputs while disarmed, then restores the original
+parameters. Offline success/failure cleanup tests pass; the combined hardware
+run is still pending. No additional FC firmware change is required for this sender.
