@@ -149,3 +149,19 @@ The separate LISRobot PS5 sender supplies all four targets at 10 Hz, uses arrows
 for individual arms, ramps with default target/speed 0.4/0.4, and checks neutral
 configuration before sending. Eleven offline Python tests pass. It issues no
 arming or flight-mode commands. RC AUX passthrough remains unsupported.
+
+## Inverse accuracy correction
+
+Branch `codex/stabilize-morphing-allocation` adds numerical row scaling to the
+morphing quad's full-rank four-axis inverse and neutral reference. Physical units
+are restored before the existing normalization. Other providers and failed-motor
+or rank-deficient cases retain the original calculation. Geometry, controller,
+servo, saturation and motor-output logic are unchanged.
+
+The regression reproduced the previous error and now passes for 15,243 geometries;
+all 29 targeted tests pass. The target image builds at 1,822,216 bytes, leaving
+12,792 bytes of flash. The expanded static stack check passes, including the
+legacy fallback. This image has not been flashed or flight-tested.
+
+See [the inverse validation report](PX4-Autopilot/Tools/morphing_quad_geometry/INVERSE_VALIDATION.md)
+for the numerical results, tested cases and hardware-validation limits.
