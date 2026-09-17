@@ -165,3 +165,23 @@ legacy fallback. This image has not been flashed or flight-tested.
 
 See [the inverse validation report](PX4-Autopilot/Tools/morphing_quad_geometry/INVERSE_VALIDATION.md)
 for the numerical results, tested cases and hardware-validation limits.
+
+## Saturation correction
+
+Branch `codex/morphing-saturation` corrects a reproduced reversal of requested
+pitch when folded arms and motor limits make the full request infeasible. The
+morphing provider enables the bounded calculation for Auto/sequential allocation.
+It preserves the requested roll/pitch direction, adds yaw within remaining motor
+authority, and respects the airmode collective-increase policy. Feasible requests
+retain the inverse solution within float roundoff. Geometry and servo calibration
+are unchanged.
+
+All 35 targeted tests pass, including 52,128 saturation property cases and 8,748
+independent numerical comparisons. The HKUST_NXT_DUAL build and expanded static
+stack audit pass. The new image has not been flashed or flight-tested; FC timing,
+runtime stack headroom, and physical behavior remain to be verified.
+
+See [the saturation report](PX4-Autopilot/Tools/morphing_quad_geometry/SATURATION_VALIDATION.md)
+for the corrected example, exact algorithm scope, and verification limits.
+The generated firmware and source/checksum manifest are under
+`PX4-Autopilot/build/hkust_nxt-dual_saturation/`.
