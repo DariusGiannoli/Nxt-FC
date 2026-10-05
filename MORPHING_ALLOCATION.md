@@ -1,5 +1,24 @@
 # Moving-arm allocation: review summary
 
+## Current consolidated version
+
+Both `Nxt-FC` and its `PX4-Autopilot` submodule use `main` for the current
+morphing system. The project pins the firmware commit, and `.gitmodules` selects
+the fork's `main` for explicit remote submodule updates. The calibrated publisher,
+inverse accuracy correction, saturation correction and 2026-10-05 audit are all
+included; the feature-branch names below describe their development history.
+
+The firmware source tree on consolidated `main` is identical to the verified
+version `a0f6020045829795ca9f42e133d65de9e4173c0d`. Its runtime code remains the
+version tested at `0b0ba519bcc0bb2b6480ab8ab66282f7cb2a267b`; the later commit adds
+verification tooling and documentation. The previous upstream-based PX4 `main`
+is preserved at `codex/backup-px4-main-2026-10-05`. A merge records both histories
+while retaining the verified morphing source tree. Consolidation does not itself
+change the firmware installed on the FC.
+
+See the [fresh firmware audit](PX4-Autopilot/Tools/morphing_quad_geometry/FIRMWARE_AUDIT_2026-10-05.md)
+for software results and hardware verification still required.
+
 Firmware change: [861f26f26e — full code diff](https://github.com/DariusGiannoli/PX4-Autopilot/commit/861f26f26e4f5cc7b6b379e7bae6b09f42239967).
 
 Publisher addition: [2f1f92457c — code and tests](https://github.com/DariusGiannoli/PX4-Autopilot/commit/2f1f92457ca9774c18638f57817405582b041260).
