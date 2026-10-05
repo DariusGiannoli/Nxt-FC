@@ -2,7 +2,7 @@
 
 ## Moving-arm firmware — supervisor summary
 
-The firmware on `firmware/morphing-arm-allocation` updates the motor allocation
+The firmware pinned by `main` updates the motor allocation
 matrix from four commanded horizontal arm angles. Enable it with
 `CA_AIRFRAME=13` and `CA_ROTOR_COUNT=4`. The input is `morphing_arm_state`:
 radians in **FR, RR, RL, FL** order, limited to +/-30 degrees.
@@ -21,6 +21,12 @@ radians in **FR, RR, RL, FL** order, limited to +/-30 degrees.
   remain outstanding; the publisher does not add an arming interlock.
 
 [Detailed supervisor summary, code diff and verification steps](MORPHING_ALLOCATION.md).
+
+The pinned firmware includes the calibrated arm publisher, inverse accuracy
+correction and direction-preserving saturation correction. The
+[2026-10-05 firmware audit](PX4-Autopilot/Tools/morphing_quad_geometry/FIRMWARE_AUDIT_2026-10-05.md)
+records 35 passing host tests, 1,081 CAD comparisons, a fresh NxtPX4v2 build and
+the remaining hardware checks.
 
 
 
